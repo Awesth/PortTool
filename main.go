@@ -40,7 +40,7 @@ func attackFTP(targetIP string, LoginStall bool) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		
+
 		if err := c.Quit(); err != nil {
 			log.Fatal(err)
 		}
@@ -104,11 +104,11 @@ func selectPort(ipTarget string, portTarget string) {
 func spoofIP() {
 
 	myip := net.ParseIP("150.0.0.1:8000")
-	addrspoot := &net.IPAddr{myip, ""}
+	addrspoof := &net.IPAddr{myip, ""}
 
 	TransportExp := &http.Transport{
 		DialContext: (&net.Dialer{
-			LocalAddr: addrspoot,
+			LocalAddr: addrspoof,
 		}).DialContext,
 	}
 	client := &http.Client{
@@ -119,7 +119,7 @@ func spoofIP() {
 
 	req, err := http.NewRequest("GET", "0.0.0.0", nil)
 	if err != nil {
-		return 
+		return
 	}
 	req.Header.Add("X-Forwarded-For", "1.2.3.4")
 	resp, err := client.Do(req)
@@ -128,11 +128,10 @@ func spoofIP() {
 	fmt.Println(resp.Body)
 }
 
-
 func main() {
 
 	var targetIP = os.Args[0]
 	var targetPort = os.Args[1]
 	selectPort(targetIP, targetPort)
-	
+
 }
